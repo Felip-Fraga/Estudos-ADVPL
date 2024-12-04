@@ -1,0 +1,93 @@
+#INCLUDE "TOTVS.CH"
+#INCLUDE "TLPP-CORE.TH"
+#INCLUDE "TLPP-REST.TH"
+
+/*/{Protheus.doc} U_GetPreco
+API de Get para retornar todos as tabelas de preco,
+mas sem trazer seus itens
+@type function
+@version 12.1,2210
+@author Felipe Fraga
+@since 03/07/2023
+@return variant, return_Logical
+/*/@Get("faturamento/tabeladepreco/tipo/visualizar")
+Function U_GetPreco()
+
+	Local aTabela     := {}  as Array
+	Local cAlias      := ""  as Character
+	Local cFinalQuery := ""  as Character
+	Local cQuery      := ""  as Character
+	Local jQuery      := Nil as Json
+	Local jResponse   := Nil as Json
+	Local lRet        := .T. as Logical
+	Local nLoop       := 0   as Numeric
+	Local oQuery      := Nil as Object
+
+	//Cria uma nova instância do objeto
+	jResponse := JsonObject():New()
+
+	//Recupera oque foi passado em Query
+	jQuery := oRest:getQueryRequest()
+
+	// Consulta que sera realizada
+	cQuery := " SELECT 	DA0_CODTAB,	DA0_DESCRI,	DA0_DATDE,	DA0_HORADE,	DA0_DATATE,	DA0_HORATE,	DA0_CONDPG,	DA0_TPHORA,	DA0_ATIVO FROM DA0990 WHERE D_E_L_E_T_ <> '*' "
+
+	cQuery := ChangeQuery(cQuery)
+
+	// Construtor da carga
+	oQuery := FWPreparedStatement():New(cQuery)
+
+	// Atribuindo informação a consulta a partir do "?"
+	oQuery:SetString(1,cDescricao)
+
+	// Retorna a query com os parâmetros já tratados e substituídos
+	cFinalQuery := oQuery:GetFixQuery()
+
+	// Abre um alias com a query informada
+	cAlias := MPSysOpenQuery(cFinalQuery)
+
+	while !(cAlias)->(Eof())
+
+		nLoop++
+
+		aAdd(aTabela, JsonObject():New())
+
+		aTabela[nLoop]["Tab. Ativa"] := Ativo(AllTrim(cAlias->(DA0_ATIVO)))
+		aTabela[nLoop]["Cod. Tabela"] := AllTrim(cAlias->(DA0_CODTAB))
+		aTabela[nLoop]["Descricao"] := AllTrim(cAlias->(DA0_DESCRI))
+		aTabela[nLoop]["Data Inicial"] := SToD(AllTrim(cAlias->(DA0_DATDE)))
+		aTabela[nLoop]["Data Final"] := SToD(AllTrim(cAlias->(DA0_DATATE)))
+		aTabela[nLoop]["Cond.Pagto."] := AllTrim(cAlias->(DA0_CONDPG))
+		aTabela[nLoop]["Hora Inicial"] := AllTrim(cAlias->(DA0_HORADE))
+		aTabela[nLoop]["Hora Final"] := AllTrim(cAlias->(DA0_HORATE))
+		aTabela[nLoop]["Tipo horario"] := TipoHorario(AllTrim(cAlias->(DA0_TPHORA)))
+
+	End
+
+	if( jHeader <> Nil )
+		//Definindo o header de resposta
+		oRest:setKeyHeaderResponse('Connection','Keep-Alive')
+		oRest:setKeyHeaderResponse('accept-encoding','gzip,deflate')
+		oRest:setKeyHeaderResponse('accept','/')
+		oRest:setKeyHeaderResponse('User-Agent','Thunder Client (https://www.thunderclient.com)')
+	Endif
+
+	// Define o valor de uma chave do cabeçalho de resposta
+	oRest:setKeyHeaderResponse('Content-Type','application/json')
+
+	// Retorna um objeto Json
+	oRest:setResponse(jResponse)
+
+Return lRet
+
+Static Function Ativo(cAtivo)
+
+	IIF(cAtivo == "2",cAtivo := "Nao", cAtivo := "Sim")
+
+Return cAtivo
+
+Static Function TipoHorario(cTipo)
+
+	IIF(cTipo == "2",cTipo := "Recorente", cTipo := "Unico")
+
+Return cTipo

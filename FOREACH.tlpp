@@ -1,0 +1,26 @@
+#include 'totvs.ch'
+
+// Comando para criar o for e atribuir valor na variavel passada
+#xcommand FOREACH <varname1> IN <varname2> INDEX <varname3> =>; 
+    For <varname3> := 1 To GetLen(<varname2>);;
+    <varname1> := <varname2>\[<varname3>\]
+
+// função Len é blacklisted na geração do PPO. Utilizando essa função consigo
+// contornar por enquanto
+Static Function GetLen(aVar)
+Return Len(aVar)
+
+// função de teste
+User Function TstForEach()
+
+    Local nIndex as numeric
+    Local nItem as numeric
+    Local aTeste as array
+
+    aTeste := {1, 2, 3}
+
+    FOREACH nItem IN aTeste INDEX nIndex
+        Conout(cValToChar(nItem))
+    Next
+
+Return

@@ -1,0 +1,17 @@
+#INCLUDE "TLPP-CORE.TH"
+
+Function U_ProductQuery() as Character
+    Local cQuery
+
+	cQuery := " SELECT #QueryFields#"
+	cQuery += " FROM " + RetSqlName('SC1') + " SC1 "
+	cQuery += " WHERE #QueryWhere#"
+Return cQuery
+
+Function U_WhereOfProducts(jParamRequest as Json) as Character
+    Local cWhere := ""
+    Default jParamRequest['c1_num'] := ""
+
+    cWhere := " SC1.D_E_L_E_T_ = '' AND C1_FILIAL = '" +xFilial("SC1")+ "' "
+    cWhere += " AND C1_NUM = '" +jParamRequest['c1_num']+ "' "
+Return cWhere

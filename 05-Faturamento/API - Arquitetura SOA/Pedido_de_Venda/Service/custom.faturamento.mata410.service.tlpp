@@ -1,0 +1,86 @@
+#INCLUDE "TLPP-CORE.TH"
+
+/*/{Protheus.doc} ServiceMATA410
+Class que trata os dados e retorna para a controller
+@type class
+@version 12.1.2210
+@author Felipe Fraga
+@since 10/07/2023
+/*/
+Class ServiceMATA410
+
+	Public Data lOkay     as Logical
+	Public Data oData     as Object
+	Public Data jResponse as Json
+
+	// Method Construtor
+	Public Method new() as Variadic
+
+	Public Method visualizarPedido() as Variadic
+	Public Method numeroPedidoUnico() as Variadic
+
+	Public Method JsonResponse() as Json
+
+EndClass
+
+/*/{Protheus.doc} ServiceMATA410::new
+Method Contrutor da Class
+@type Method
+@version 12.1.2210
+@author Felipe Fraga
+@since 10/07/2023
+@return variant, return_Nil
+/*/
+Method new() Class ServiceMATA410
+
+	::lOkay     := .T.
+	::oData     := NIL
+	::jResponse := JsonObject():New()
+
+Return
+
+/*/{Protheus.doc} ServiceMATA410::visualizarPedido
+Visualizar todo os pedidos de venda
+@type Method
+@version 12.1.2210
+@author Felipe Fraga
+@since 10/07/2023
+@return variant, return_Nil
+/*/
+Method visualizarPedido() Class ServiceMATA410
+
+	::oData := DataMATA410():New()
+	::lOkay := ::oData:visualizarPedido()
+
+Return
+
+/*/{Protheus.doc} ServiceMATA410::numeroPedido
+Mostra o pedido que voce especifica pela sua rota
+@type method
+@version 12.1.2210
+@author felip
+@since 10/07/2023
+@return variant, return_Nil
+/*/
+Method numeroPedidoUnico() Class ServiceMATA410
+
+	::oData := DataMATA410():New()
+	::lOkay := ::oData:numeroPedidoUnico()
+
+Return
+
+/*/{Protheus.doc} ServiceMATA410::JsonResponse
+Retorna um Json de resposta para o usuario
+@type Method
+@version 12.1.2210
+@author felip
+@since 10/07/2023
+@return variant, return_Json
+/*/
+Method JsonResponse() Class ServiceMATA410
+
+	::jResponse[ 'codigo' ]   := ::oData:mostraStatus()
+	::jResponse[ 'dados' ]    := ::oData:mostraDados()
+	::jResponse[ 'mensagem' ] := ::oData:mostraMensagem()
+
+Return ::jResponse

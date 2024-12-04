@@ -1,0 +1,178 @@
+#INCLUDE "TOTVS.CH"
+#INCLUDE "TLPP-CORE.TH"
+#INCLUDE "TLPP-REST.TH"
+#INCLUDE "FWMVCDEF.CH"
+#INCLUDE "TBICONN.CH"
+
+/*/{Protheus.doc} U_PostProdutos
+Criando novos produtos
+@type function
+@version 12.1.33
+@author felip
+@since 20/01/2023
+/*/@POST("faturamento/produtos/create")
+Function U_PostProdutos()
+
+	Local cMessage := "" as Character
+	Local cTudoOK := "OK" as Character
+	Private aBodyDA1       := {}         as Array
+	Private aBodySB1       := {}         as Array
+	Private aCampoDA1      := {}         as Array
+	Private aCampoSB1      := {}         as Array
+	Private cError         := ""         as Character
+	Private jBody          := Nil        as Json
+	Private jHeader        := Nil        as Json
+	Private jResponse      := Nil        as Json
+	Private lRet           := .T.        as Logical
+
+	if SELECT("SX2") == 0 //Para ser executado pelo usuario
+		PREPARE ENVIRONMENT EMPRESA "99" FILIAL "01"
+	endif
+
+	// Cria um object Json
+	jBody := JsonObject():new()
+
+	// Cria um Json de resposta no final do proceso realizado
+	jResponse := JsonObject():New()
+
+	// Permite popular o JsonObject
+	jBody:fromJson( oRest:GetBodyRequest() )
+
+	// Atribuindo informações que serao de auto-incremental
+	jBody["produto"]['Codigo'] := JsonObject():New()
+	jBody["tabela_preco"]['Item'] := JsonObject():New()
+	jBody["tabela_preco"]['Cod.Produto'] := JsonObject():New()
+	jBody["tabela_preco"]['Tipo Operac.'] := JsonObject():New()
+
+	// Pega o nome dos campos que foram passados na JSON
+	aBodySB1 := jBody:GetJsonObject("produto"):GetNames()
+	aBodyDA1 := jBody:GetJsonObject("tabela_preco"):GetNames()
+
+	// Fazendo um Bkp dos campos passados no Json
+	aCampoSB1 := jBody:GetJsonObject("produto"):GetNames()
+	aCampoDA1 := jBody:GetJsonObject("tabela_preco"):GetNames()
+
+	// Retorna todo o cabecalho da requisicao
+	jHeader := oRest:getHeaderRequest()
+
+	// Pega o Json que foi enviado na requisição
+	cError := jBody:FromJson(oRest:getBodyRequest())
+
+	// Informações que serao atribuidas aos campos do tipo auto-incremental
+	jBody["produto"]['Codigo'] := NovoProduto()
+	jBody["tabela_preco"]['Item'] := NovoItem()
+	jBody["tabela_preco"]['Cod.Produto'] := NovoProduto()
+	jBody["tabela_preco"]['Tipo Operac.'] := "4"
+
+	//Se tiver algum erro no Parse, encerra a execução
+	IF !Empty(cError)
+		jResponse['errorId']  := 'NEW004'
+		jResponse['error']    := 'Parse do JSON'
+		jResponse['solution'] := 'Erro ao fazer o Parse do JSON'
+	Else
+
+		cMessage := CadastroProduto(aBodySB1,aCampoSB1,aBodyDA1,aCampoDA1,jBody)
+
+		if (cMessage == cTudoOK)
+			oRest:setStatusCode(200)
+			jResponse['error']  := 'Produto criado com sucesso e cadastrado na tabela de preco'
+		else
+			oRest:setStatusCode(400)
+			jResponse['error']  := cMessage
+		endif
+	Endif
+
+	if( jHeader <> Nil )
+		//Definindo o header de resposta
+		oRest:setKeyHeaderResponse('Connection','Keep-Alive')
+		oRest:setKeyHeaderResponse('accept-encoding','gzip,deflate')
+		oRest:setKeyHeaderResponse('accept','/')
+		oRest:setKeyHeaderResponse('User-Agent','Thunder Client (https://www.thunderclient.com)')
+	Endif
+
+	//Define o retorno
+	oRest:setKeyHeaderResponse('Content-Type','application/json') // Define a estrutura como Json
+	oRest:setResponse(jResponse)
+
+	if SELECT("SX2") > 0 // Finaliza operação pelo usuario
+		RESET ENVIRONMENT
+	endif
+
+Return lRet
+
+
+Static Function NovoProduto()
+
+	Local cAlias        := ""  as Character
+	Local cQuery        := ""  as Character
+	Local cValorProduto := ""  as Character
+	Local oQuery        := Nil as Object
+
+	// Criando um novo Alias
+	cAlias := GetNextAlias()
+
+	// Query que será executada
+	cQuery := "SELECT MAX(B1_COD) B1_COD FROM SB1990 SB1 WHERE B1_FILIAL = ''  AND D_E_L_E_T_  <> '*'"
+
+	// Construtor da carga
+	oQuery := FWPreparedStatement():New(cQuery)
+
+	// Retorna a query com os parâmetros já tratados e substituídos
+	cQuery := oQuery:GetFixQuery()
+
+	// Abre um alias com a query informada
+	cAlias := MPSysOpenQuery(cQuery)
+
+	// Atribuindo a informação para adicionar o novo item
+	cValorProduto := SOMA1((cAlias)->B1_COD)
+
+Return cValorProduto
+
+Static Function CadastroProduto(aBodySB1,aCampoSB1,aBodyDA1,aCampoDA1,jBody)
+
+	Local cMessage := ""
+
+	cMessage := U_FAPD01FF(aBodySB1,aCampoSB1,aBodyDA1,aCampoDA1,jBody)
+
+Return cMessage
+
+/*/{Protheus.doc} novoitem
+Retorna  o novo codigo que sera gravada na
+tabela DA1
+@type function
+@version 12..2210
+@author felip
+@since 28/06/2023
+@param cPedido, character, param
+@return variant, return_Character
+/*/
+Static function novoitem(cPedido)
+
+	Local cAlias      := ""  as Character
+	Local cQuery      := ""  as Character
+	Local oQuery      := Nil as Object
+
+	// Criando um novo Alias
+	cAlias := GetNextAlias()
+
+	// Query que será executada
+	cQuery := "SELECT MAX(DA1_ITEM) DA1_ITEM FROM DA1990 DA1 WHERE DA1_FILIAL = ''  AND	DA1_CODTAB = ? AND D_E_L_E_T_  <> '*'"
+
+	// Construtor da carga
+	oQuery := FWPreparedStatement():New(cQuery)
+
+	//Atribuindo as informações
+	oQuery:SetString(1, cPedido)
+
+	// Retorna a query com os parâmetros já tratados e substituídos
+	cQuery := oQuery:GetFixQuery()
+
+	// Abre um alias com a query informada
+	cAlias := MPSysOpenQuery(cQuery)
+
+	// Atribuindo a informação para adicionar o novo item
+	cValItem := SOMA1((cAlias)->DA1_ITEM)
+
+	cValItem := cValToChar(cValItem)
+
+Return cValItem

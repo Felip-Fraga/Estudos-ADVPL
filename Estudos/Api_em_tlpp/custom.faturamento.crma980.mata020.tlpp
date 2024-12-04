@@ -1,0 +1,159 @@
+#INCLUDE "TOTVS.CH"
+#INCLUDE "TLPP-CORE.TH"
+#INCLUDE "TLPP-REST.TH"
+
+/*/{Protheus.doc} U_GetClieForne
+Retorna um Get do tipo cliente ou fornecedor junto
+ com filtros como adicionais ao Json de resposts
+@type function
+@version 12.1.33
+@author felip
+@since 17/01/2023
+/*/@Get("/fornecedores/clientes/:table")
+Function U_GetClieForne()
+
+	Local cAlias      := ""  as Character
+	Local cFinalQuery := ""  as Character
+	Local cQuery      := ""  as Character
+	Local jParam      := Nil as Json
+	Local jQuery      := Nil as Json
+	Local jResponse   := Nil as Json
+	Local lRet        := .T. as Logical
+	Local nX          := 0   as Numeric
+
+	// Cria uma nova instância no objeto
+	jResponse := JsonObject():New()
+
+	// Pega o parametro passado na route
+	jParam := oRest:getPathParamsRequest()
+
+	// Responsavel pela query que será consumida
+	jQuery := oRest:getQueryRequest()
+
+	// Construtor da carga
+	oQuery := FWPreparedStatement():New()
+
+	// Verifica se o tabela passada na rota está correta
+	if(jParam['table'] == "SA1" .Or. jParam['table'] == "SA2")
+
+		// Verifica se estiver usando o fields e se está passando no minimo dois campos como obrigatorios // Ou caso exista mas nao tenha informção dentro  // ou nao exista
+		if((jQuery:HasProperty('fields') .And. !Empty(jQuery['fields']) .And. Len(StrTokArr2(jQuery['fields'],",")) >= 2) .Or. (jQuery:HasProperty('fields') .And. Empty(jQuery['fields'])) .Or. !jQuery:HasProperty('fields'))
+
+			// Vetifica se todos os campos passados estão com mesmo referencial da tabela
+			if(ValidaCampos(jParam,jQuery))
+
+				// Fazendo atribuição a uma query
+				if(jQuery:HasProperty('fields') .And.!Empty(jQuery['fields']))
+					cQuery := "SELECT " + jQuery['fields'] +" FROM " + jParam['table'] + "990 WHERE 1=1"
+				else
+					if(jParam['table'] == "SA1")
+						cQuery := "SELECT A1_COD, A1_LOJA, A1_NOME, A1_END, A1_NREDUZ, A1_TIPO, A1_EST, A1_MUN FROM "+ jParam['table'] + "990 WHERE 1=1"
+					else
+						cQuery := "SELECT A2_COD, A2_LOJA, A2_NOME, A2_NREDUZ, A2_END, A2_EST, A2_MUN, A2_TIPO FROM "+ jParam['table'] + "990 WHERE 1=1"
+					endif
+				endif
+
+				// Informa a query a ser executada, deve ser utilizada a construção com os parametros com "?"
+				oQuery:SetQuery(cQuery)
+
+				// Retorna a query com os parâmetros já tratados e substituídos
+				cFinalQuery := oQuery:GetFixQuery()
+
+				// Abre um alias com a query informada
+				cAlias := MPSysOpenQuery(cFinalQuery)
+
+				// Verrifica se existew informação no alias
+				if(!(cAlias)->(Eof()))
+					oRest:setStatusCode(200)
+					jResponse['status'] := "success"
+					// Verifica se a tabela que está em uso é a SA1
+					if(!jQuery:HasProperty("fields") .Or. Empty(jQuery['fields']) .And. jParam['table'] == "SA1")
+						While (cAlias)->(!Eof())
+							aAdd(aDados, JsonObject():New())
+							aDados[Len(aDados)]["A1_COD"]  := (cAlias)->A1_COD
+							aDados[Len(aDados)]["A1_LOJA"] := (cAlias)->A1_LOJA
+							aDados[Len(aDados)]["A1_NOME"] := (cAlias)->A1_NOME
+							aDados[Len(aDados)]["A1_CGC"]  := (cAlias)->A1_CGC
+							(cAlias)->(DbSkip())
+						end
+						// Verifica se a tabela que está em uso é a SA2
+					elseif(!jQuery:HasProperty("fields") .Or. Empty(jQuery['fields']) .And. jParam['table'] == "SA2")
+						While (cAlias)->(!Eof())
+							aAdd(aDados, JsonObject():New())
+							aDados[Len(aDados)]["A2_COD"]  := (cAlias)->A2_COD
+							aDados[Len(aDados)]["A2_LOJA"] := (cAlias)->A2_LOJA
+							aDados[Len(aDados)]["A2_NOME"] := (cAlias)->A2_NOME
+							aDados[Len(aDados)]["A2_CGC"]  := (cAlias)->A2_CGC
+							(cAlias)->(DbSkip())
+						end
+					else
+						While (cAlias)->(!Eof())
+							while nX <= Len(StrTokArr2(jQuery['fields'],","))
+								aDados[Len(aDados)][StrTokArr2(jQuery['fields'],",")[nX]] := (cAlias)->&(StrTokArr2(jQuery['fields'],",")[nX])
+								nX++
+							end
+							(cAlias)->(DbSkip())
+						end
+					endif
+					jResponse['produtos'] := aDados
+				else
+					oRest:setStatusCode(400)
+					jResponse['status'] := "error"
+					jResponse['message'] := "Nenhum registro encontrado"
+				endif
+
+			else
+				oRest:setStatusCode(400)
+				jResponse['status'] := "error"
+				jResponse['message'] := "Por favor, insira o nome dos campos reference a tebela " + jParam['table']
+			endif
+		else
+			oRest:setStatusCode(400)
+			jResponse['status'] := "error"
+			jResponse['message'] := "Caso esteja usando a Query fields é obrigatorio passar no minimo dois campos como obrigatorios"
+		endif
+	else
+		oRest:setStatusCode(400)
+		jResponse['status'] := "error"
+		jResponse['message'] := "Por favor, passar somente a SA1 --> clientes ou SA2 --> Fornecedore"
+
+	endif
+
+	// Define o valor de uma chave do cabeçalho de resposta
+	oRest:setKeyHeaderResponse('Content-Type','application/json')
+
+	// Retorna um objeto Json
+	oRest:setResponse(jResponse)
+
+	// Destrói a Lista
+	oQuery:Destroy()
+	FwFreeObj(oQuery)
+
+
+Return lRet
+/*/{Protheus.doc} ValidaCampos
+Cira um arraym com as fields ou nao cria o Json
+@type function
+@version 12.1.33
+@author felip
+@since 17/01/2023
+/*/
+Static function ValidaCampos(jParam as Json,jQuery as Json)
+
+	Local lRet := .T. as Logical
+	Local nX := 1 as Numeric
+
+	if(Empty(jQuery['fields']) == Nil)
+	endif
+
+	if(!Empty(jQuery['fields']))
+		While (nX <= Len(StrTokArr2(jQuery['fields'],",")))
+			if(Left(StrTokArr2(jQuery['fields'],",")[nX],2) <> Right(jParam['table'],2))
+				lRet := .F.
+				Exit
+			endif
+			nX++
+		enddo
+	endif
+
+Return lRet

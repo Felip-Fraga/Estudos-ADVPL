@@ -1,0 +1,190 @@
+#INCLUDE "TOTVS.CH"
+#INCLUDE "TLPP-CORE.TH"
+#INCLUDE "TLPP-REST.TH"
+#INCLUDE "FWMVCDEF.CH"
+#INCLUDE "TBICONN.CH"
+
+/*/{Protheus.doc} U_PostVenda
+Criando um pedido de venda e criasndo um item no pedido de venda
+@type function
+@version 12.1.2210
+@author felip
+@since 22/06/2023
+@return variant, return
+/*/@POST("faturamneto/pedido/create")
+Function U_PostVenda()
+
+	Local nX  		:= 0 		  as Numeric
+	PRIVATE aBodySC5    := {}         as Array
+	PRIVATE aBodySC6    := {}         as Array
+	PRIVATE aCampoSC5   := {}         as Array
+	PRIVATE aCampoSC6   := {}         as Array
+	PRIVATE aDadosSC5   := {}         as Array
+	PRIVATE aDadosSC6   := {}         as Array
+	PRIVATE aLogAuto    := {}         as Array
+	PRIVATE aSC5        := {}         as Array
+	PRIVATE aSC6        := {}         as Array
+	PRIVATE cDirLog     := '\x_logs\' as Character
+	PRIVATE cErrorLog   := ""         as Character
+	PRIVATE cTituloSC5  := ""         as Character
+	PRIVATE cTituloSC6  := ""         as Character
+	PRIVATE jBody       := Nil        as Json
+	PRIVATE jHeader     := Nil        as Json
+	PRIVATE jResponse   := Nil        as Json
+	PRIVATE lMsErroAuto := .F.        as Logical
+	PRIVATE nLoop       := 0          as Numeric
+	PRIVATE aArray		:= {}		  as Numeric
+
+	if SELECT("SX2") == 0 //Para ser executado pelo usuario
+		PREPARE ENVIRONMENT EMPRESA "99" FILIAL "01"
+	endif
+
+	//Se não existir a pasta de logs, cria..
+	IF ! ExistDir(cDirLog)
+		MakeDir(cDirLog)
+	EndIF
+
+	// Cria um object Json
+	jBody := JsonObject():new()
+
+	// Cria um Json de resposta no final do proceso realizado
+	jResponse := JsonObject():New()
+
+	// Cria um Json de resposta no final do proceso realizado
+	jResponse := JsonObject():New()
+
+	// Pega todos os campos da tabela de produtos
+	aSC5 := FWSX3Util():GetAllFields( "SC5" , .T. )
+
+	// Pega todos os campos da tabela de preco
+	aSC6 := FWSX3Util():GetAllFields( "SC6" , .T. )
+
+	// Permite popular o JsonObject
+	jBody:fromJson( oRest:GetBodyRequest() )
+
+	aBodySC5 := jBody:GetNames()
+	aBodySC6 := jBody:GetJsonObject("ItemPedido"):GetNames()
+
+	aCampoSC5 := jBody:GetNames()
+	aCampoSC6 := jBody:GetJsonObject("ItemPedido"):GetNames()
+
+	DBSelectArea("SC5")
+
+	SC5->(DbSetOrder(1))
+
+	DadosSC5()
+	DadosSC6()
+
+	if SC5->(!DBSeek(xFilial("SC5") + aDadosSC5[8][2]))
+
+		FWVetByDic(aDadosSC5,"SC5",.F.,/*nCpoPos*/)
+		FWVetByDic(aDadosSC6,"SC6",.T.,/*nCpoPos*/)
+
+		MsExecAuto({|x, y, z| MATA410(x, y, z)}, aDadosSC5, aDadosSC6, 3)
+
+		if lMsErroAuto
+
+			//Monta o texto do Error Log que será salvo
+			cErrorLog   := ""
+			aLogAuto    := GetAutoGrLog()
+			For nX := 1 To Len(aLogAuto)
+				cErrorLog += aLogAuto[nX] + CRLF
+			Next
+
+			//Grava o arquivo de log
+			cArqLog := 'PostProduto_' + dToS(Date()) + '_' + StrTran(Time(), ':', '-') + '.log'
+			MemoWrite(cDirLog + cArqLog, cErrorLog)
+
+			//Define o retorno para o WebService
+			oRest:setStatusCode(500)
+			jResponse['errorId']  := 'NEW005'
+			jResponse['error']    := 'Erro na inclusão do produto na tabela de preco: '
+			jResponse['solution'] := 'Nao foi possivel incluir o produto na tabela de preco, foi gerado um arquivo de log em ' + cDirLog + cArqLog + ' '
+
+		else
+			oRest:setStatusCode(200)
+			jResponse['Registro'] := "Pedido de venda cadastrado com sucesso"
+		endif
+
+	else
+		oRest:setStatusCode(400)
+		jResponse['error']  := 'Produto ja registrado na tabela de preço'
+	endif
+
+	if( jHeader <> Nil )
+		//Definindo o header de resposta
+		oRest:setKeyHeaderResponse('Connection','Keep-Alive')
+		oRest:setKeyHeaderResponse('accept-encoding','gzip,deflate')
+		oRest:setKeyHeaderResponse('accept','/')
+		oRest:setKeyHeaderResponse('User-Agent','Thunder Client (https://www.thunderclient.com)')
+	Endif
+
+	//Define o retorno
+	oRest:setKeyHeaderResponse('Content-Type','application/json') // Define a estrutura como Json
+	oRest:setResponse(jResponse)
+
+	if SELECT("SX2") > 0 // Finaliza operação pelo usuario
+		RESET ENVIRONMENT
+	endif
+
+
+Return
+
+Static Function DadosSC5()
+
+	Local nX := 0 as Numeric
+
+	For nX := 1 to len(aBodySC5)
+		IIF(aBodySC5[nX] $ "Modal_ANP", aBodySC5[nX] := "Modal ANP" ,Nil)
+		IIF(aBodySC5[nX] $ "Cond_Pagto", aBodySC5[nX] := "Cond. Pagto" ,Nil)
+		IIF(aBodySC5[nX] == "Tipo_Cliente", aBodySC5[nX] := "Tipo Cliente",Nil)
+		IIF(aBodySC5[nX] $ "Tipo_Pedido", aBodySC5[nX] := "Tipo Pedido" ,Nil)
+	Next
+
+	cTituloSC5 := Arrtokstr(aBodySC5)
+
+	nX := 0
+
+	For nX := 1 to Len(aSC5)
+		if( AllTrim(GetSX3Cache(aSC5[nX],'X3_TITULO')) $ cTituloSC5)
+			nPosFild := aScan(aBodySC5, AllTrim(GetSX3Cache(aSC5[nX], 'X3_TITULO')))
+			aadd(aDadosSC5, {AllTrim(GetSX3Cache(aSC5[nX], 'X3_CAMPO')), jBody[aCampoSC5[nPosFild]], Nil})
+		endif
+	Next
+
+
+
+	aadd(aDadosSC5, {"C5_FILIAL","01",Nil})
+	aadd(aDadosSC5, {"C5_NUM","000001",Nil})
+
+Return
+
+Static Function DadosSC6()
+
+	Local nX := 0 as Numeric
+
+	For nX := 1 to len(aBodySC6)
+		IIF(aBodySC6[nX] $ "Cod_Fiscal", aBodySC6[nX] := "Cod. Fiscal",Nil)
+		IIF(aBodySC6[nX] $ "Num_Pedido", aBodySC6[nX] := "Num. Pedido" ,Nil)
+		IIF(aBodySC6[nX] $ "Prc_Lista",  aBodySC6[nX] := "Prc Lista" ,Nil)
+		IIF(aBodySC6[nX] $ "Sit_Tribut", aBodySC6[nX] := "Sit.Tribut." ,Nil)
+		IIF(aBodySC6[nX] $ "Tipo_Saida", aBodySC6[nX] := "Tipo Saida" ,Nil)
+		IIF(aBodySC6[nX] $ "Vlr_Total",  aBodySC6[nX] := "Vlr.Total" ,Nil)
+	Next
+
+	cTituloSC6 := Arrtokstr(aBodySC6)
+
+	nX := 0
+
+	aadd(aDadosSC6, {})
+	For nX := 1 to Len(aSC6)
+		If ALLTRIM(GetSX3Cache(aSC6[nX], 'X3_TITULO')) $ cTituloSC6
+			nPosFild := aScan(aBodySC6, ALLTRIM(GetSX3Cache(aSC6[nX], 'X3_TITULO')))
+			aadd(aDadosSC6[1], {Alltrim(GetSX3Cache(aSC6[nX], 'X3_CAMPO')),jBody["ItemPedido"][aCampoSC6[nPosFild]], Nil})
+		EndIf
+	Next
+
+	aadd(aDadosSC6[1], {"C6_FILIAL","01",Nil})
+	aadd(aDadosSC6[1], {"C5_NUM","000001",Nil})
+
+Return

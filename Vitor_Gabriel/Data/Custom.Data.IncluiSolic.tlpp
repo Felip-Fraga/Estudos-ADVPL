@@ -1,0 +1,56 @@
+#INCLUDE "TLPP-CORE.TH"
+#INCLUDE "TOTVS.CH"
+
+Function U_CriaSolicita(jBody as Json) as Json
+    Local aCampos      := jBody:GetNames()   as Array
+    Local aItensSolic  := {}                 as Array
+    Local aItem        := {}                 as Array
+    Local aLinha       := {}                 as Array
+    Local aSolicitacao := {}                 as Array
+    Local jReponse     := JsonObject():New() as Json
+    Local nCamposItem  := 0                  as Numeric
+    Local nPosicCampo  := 0                  as Numeric
+    Local nX           := 0                  as Numeric
+    Local nY           := 1                  as Numeric
+    Local aError       := {}                 as Array
+	Private lAutoErrNoFile := .T. as Logical
+    Private lMsErroAuto    := .F. as Logical
+    Private lMsHelpAuto    := .T. as Logical
+
+    While nX < Len(aCampos)
+        nX++  
+        If (aCampos[nX] != "ITEMS")
+            Aadd(aSolicitacao,{aCampos[nX], jBody[aCampos[nX]],Nil})
+        Endif
+        If (aCampos[nX] == "ITEMS")
+            aItensSolic := jBody[aCampos[nX]]
+        Endif    
+    End
+    While nY <= Len(aItensSolic)
+        nCamposItem := Len(aItensSolic[nY]:GetNames())
+        If (nPosicCampo != nCamposItem)
+            nPosicCampo++
+            Aadd(aLinha,{aItensSolic[nY]:GetNames()[nPosicCampo],aItensSolic[nY][aItensSolic[nY]:GetNames()[nPosicCampo]],Nil})
+        Endif
+        If (nPosicCampo == nCamposItem)
+            Aadd(aItem,aLinha)
+            nY++
+            aLinha := {}
+            nPosicCampo := nCamposItem := 0
+        Endif
+    End
+    MSExecAuto({|a,b,c| MATA110(a,b,c)},aSolicitacao,aItem,3)
+    If !lMsErroAuto
+        ConOut("Sucesso! " + cNumero)
+        jReponse['code'] := 200
+        jReponse['titulo'] := "SUCESSO!"
+    else
+        RollBackSX8()
+        aError := GetAutoGrLog()
+        Conout("Error: " + ArrTokStr(aError,";"))
+        jReponse['titulo'] := "Falha!"
+        jReponse['message'] := EncodeUtf8(VarInfo("", aError))
+        jReponse['proposta'] := EncodeUtf8(Repl("0",TamSX3("ADY_PROPOS")[1]))
+        jReponse['code'] := 200
+    Endif
+Return jReponse

@@ -1,0 +1,86 @@
+#INCLUDE "TOTVS.CH"
+#INCLUDE "TLPP-CORE.TH"
+#INCLUDE "TLPP-REST.TH"
+
+@POST("/cadastros/cliente")
+Function U_POSTCLI()
+
+    Local jBody     := JsonObject():New() as Json
+    Local cMensagem := "" as Character
+    Local nCodigo   := 200 as Numeric
+    Local jResponse := JsonObject():New()
+    Local aCab      := {} as Array
+
+    Private lAutoErrNoFile := .T. as Logical
+	Private lMsErroAuto    := .F. as Logical
+	Private lMSHelpAuto    := .T. as Logical
+
+
+    jBody:fromJson( oRest:GetBodyRequest() )
+
+    if !Empty(jBody)
+        dbSelectArea("SA1")
+        SA1->(dbSetOrder(1))
+        if(SA1->(DbSeek(jBody['FILIAL'] + jBody['CODIGO'] + "01")))
+
+            Aadd(aCab,{"A1_FILIAL"  ,jBody["FILIAL"]                                                    ,Nil})
+            Aadd(aCab,{"A1_COD"     ,jBody["CODIGO"]                                                    ,Nil})
+            Aadd(aCab,{"A1_LOJA"    ,"01"                                                               ,Nil})
+            Aadd(aCab,{"A1_NOME"    ,jBody["NOME"]                                                      ,Nil})
+            Aadd(aCab,{"A1_NREDUZ"  ,jBody["NOMEFANTASIA"]                                              ,Nil})
+            Aadd(aCab,{"A1_TIPO"    ,jBody["TIPO"]                                                      ,Nil})
+            Aadd(aCab,{"A1_CGC"     ,jBody["CGC"]                                                       ,Nil})
+            Aadd(aCab,{"A1_END"     ,jBody["ENDERECO"]                                                  ,Nil})
+            Aadd(aCab,{"A1_EST"     ,"MT"                                                               ,Nil})
+            Aadd(aCab,{"A1_COD_MUN" ,jBody["MUNICIO"]                                                   ,Nil})
+            Aadd(aCab,{"A1_MUN"     ,POSICIONE("CC2",3,xFilial("CC2") + jBody["MUNICIPIO"],"CC2_MUN")   ,Nil})
+            Aadd(aCab,{"A1_BAIRRO"  ,jBody["BAIRRO"]                                                    ,Nil})
+            Aadd(aCab,{"A1_CEP"     ,jBody["CEP"]                                                       ,Nil})
+            Aadd(aCab,{"A1_GRPVEN"  ,jBody["GRUPOVENDA"]                                                ,Nil})
+
+            MsExecAuto({|x,y|MATA030(x,y)},aCab,3) //inclusao
+
+            if !lMsErroAuto
+                nCodigo := 400
+                cMensagem := "Cadastro com sucesso cliente"
+            else
+                nCodigo := 400
+                cMensagem := "Erro no cadastro do Cliente"
+            Endif
+        else
+            nCodigo := 400
+            cMensagem := "Cadastro ja existente"
+        Endif
+    Else
+        nCodigo := 400
+        cMensagem := "Json Vazio ou nao informado"
+    Endif
+
+    jResponse['CODIGO'] := nCodigo
+    jResponse['MENSAGEM'] := cMensagem
+
+    oRest:setStatusCode(nCodigo)
+	oRest:setResponse(jResponse:ToJson())
+	oRest:setKeyHeaderResponse('Connection','Keep-Alive')
+	oRest:setKeyHeaderResponse('accept-encoding','gzip,deflate')
+	oRest:setKeyHeaderResponse('accept','/')
+	oRest:setKeyHeaderResponse('User-Agent','Thunder Client (https://www.thunderclient.com)')
+
+
+Return
+
+/*
+{
+    "FILIAL" : "01",
+    "CODIGO" : "000001",
+    "NOME" : "Felipe Fraga",
+    "NOMEFANTASIA" : "Fraga de Assis",
+    "TIPO" : "F",
+    "CGC" : "09723167107",
+    "ENDERECO" : "AV. Senador",
+    "MUNICIPIO" : "03403"
+    "BAIRRO" : "TESTE",
+    "CEP" "78000000"
+    "GRUPOVENDA" : "000006"
+}
+*/
