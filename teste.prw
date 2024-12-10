@@ -30,7 +30,7 @@ User Function teste()
       nObjAltur := 120
       oGetObj7  := TSimpleEditor():New( 0,0,oDialogPvt,260,184,,,{|u| if(PCount()>0,cText := u,cText)})
 
-      oTButton1 := TButton():Create( oDialogPvt,062,002,"Botão 04",{||alert("Botão 04")},; 40,10,,,,.T.,,,,,,)
+      oTButton1 := TButton():Create( oDialogPvt,062,002,"Botão 04",{||alert("Botão 04")},40,10,,,,.T.,,,,,,)
 
    oDialogPvt:Activate(, , , lCentraliz, , , bBlocoIni)
      

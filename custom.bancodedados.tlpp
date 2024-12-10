@@ -5,9 +5,10 @@ Function U_bancodedados()
 
     //Objetos da Janela
     Private oDlgPvt
+    Private oDlgP1t
     Private oMsGetSBM
-    Private aHeadSBM := {}
-    Private aColsSBM := {}
+    Private aHeader := {}
+    Private aCols := {}
     Private oBtnFech
     Private cText
 
@@ -23,25 +24,23 @@ Function U_bancodedados()
     Private    oFontBtn   := TFont():New(cFontUti,,-14)
 
     if SELECT("SX2") == 0
-        PREPARE ENVIRONMENT EMPRESA '99' FILIAL '01' USER 'Admin' PASSWORD '123456'
+        PREPARE ENVIRONMENT EMPRESA '99' FILIAL '01' USER 'Admin' PASSWORD ''
     endif
 
     //Criando o cabeçalho da Grid
     //              Título               Campo        Máscara                        Tamanho                   Decimal                   Valid               Usado  Tipo F3     Combo
-    // aAdd(aHeadSBM, {"Código",            "BM_GRUPO",  "",                            TamSX3("BM_GRUPO")[01],   0,                        ".T.",              ".T.", "C", "",    ""} )
-    // aAdd(aHeadSBM, {"Descrição",         "BM_DESC",   "",                            TamSX3("BM_DESC")[01],    0,                        "NaoVazio()",       ".T.", "C", "",    ""} )
-    // aAdd(aHeadSBM, {"Status Grupo",      "BM_STATUS", "",                            TamSX3("BM_STATUS")[01],  0,                        "PERTENCE('1234')", ".T.", "C", "",    "1=Novo;2=Remanufaturado;3=Reciclado;4=Usado"} )
-    // aAdd(aHeadSBM, {"Procedencia",       "BM_PROORI", "",                            TamSX3("BM_PROORI")[01],  0,                        "Pertence('01')",   ".T.", "C", "",    "1=Original;0=Nao Original"} )
-    // aAdd(aHeadSBM, {"Total de Produtos", "XX_TOTAL",  "@E 999,999,999,999,999,999",  018,                      0,                        ".T.",              ".T.", "N", "",    ""} )
-    // aAdd(aHeadSBM, {"SBM Recno",         "XX_RECNO",  "@E 999,999,999,999,999,999",  018,                      0,                        ".T.",              ".T.", "N", "",    ""} )
- 
-    Processa({|| estruturatela()}, "Processando")
+    // aAdd(aHeader, {"Código",            "BM_GRUPO",  "",                            TamSX3("BM_GRUPO")[01],   0,                        ".T.",              ".T.", "C", "",    ""} )
+    // aAdd(aHeader, {"Descrição",         "BM_DESC",   "",                            TamSX3("BM_DESC")[01],    0,                        "NaoVazio()",       ".T.", "C", "",    ""} )
+    // aAdd(aHeader, {"Status Grupo",      "BM_STATUS", "",                            TamSX3("BM_STATUS")[01],  0,                        "PERTENCE('1234')", ".T.", "C", "",    "1=Novo;2=Remanufaturado;3=Reciclado;4=Usado"} )
+    // aAdd(aHeader, {"Procedencia",       "BM_PROORI", "",                            TamSX3("BM_PROORI")[01],  0,                        "Pertence('01')",   ".T.", "C", "",    "1=Original;0=Nao Original"} )
+    // aAdd(aHeader, {"Total de Produtos", "XX_TOTAL",  "@E 999,999,999,999,999,999",  018,                      0,                        ".T.",              ".T.", "N", "",    ""} )
+    // aAdd(aHeader, {"SBM Recno",         "XX_RECNO",  "@E 999,999,999,999,999,999",  018,                      0,                        ".T.",              ".T.", "N", "",    ""} )
  
     //Criação da tela com os dados que serão informados
     DEFINE MSDIALOG oDlgPvt TITLE "Grupos de Produto" FROM 000, 000  TO nJanAltu, nJanLarg COLORS 0, 16777215 PIXEL         
         //Botões
         oGetObj7  := TSimpleEditor():New( 0.5,0.5,oDlgPvt,(nJanLarg/2)-90,60,,,{|u| if(PCount()>0,cText := u,cText)})
-        oTButton1 := TButton():New(0.5, 350, "&2", oDlgPvt, {|| }   , 40, 40, , , .F., .T., .F., , .F., , , .F.)
+        oTButton1 := TButton():New(1, 400, "&2", oDlgPvt, {||Processa({|| estruturatela(cText)}, "Processando") }   , 40, 40, , , .F., .T., .F., , .F., , , .F.)
          
         //Grid dos grupos
         oMsGetSBM := MsNewGetDados():New(   080,;                //nTop      - Linha Inicial
@@ -59,8 +58,8 @@ Function U_bancodedados()
                                             ,;                   //cSuperDel - Validação ao apertar '+'
                                             ,;                   //cDelOk    - Validação na exclusão da linha
                                             oDlgPvt,;            //oWnd      - Janela que é a dona da grid
-                                            aHeadSBM,;           //aHeader   - Cabeçalho da Grid
-                                            aColsSBM)            //aCols     - Dados da Grid
+                                            aHeader,;           //aHeader   - Cabeçalho da Grid
+                                            aCols)            //aCols     - Dados da Grid
                                              
         //Desativa as manipulações
         oMsGetSBM:lActive := .F.
@@ -74,6 +73,75 @@ Function U_bancodedados()
     
 Return
 
-Static Function estruturatela()
+Static Function estruturatela(cText)
 
-Return
+    Local cAlias      := ""    as Character
+    Local cFinalQuery := ""    as Character
+    Local cQuery      := cText as Character
+    Local oStatement  := NIl   as Object
+    Local aCampos     := {}    as Array
+    Local nX          := 1     as Numeric
+    Local nY          := 1     as Numeric
+    
+    aHeader := {}
+    aCols := {}
+
+    oStatement := FWPreparedStatement():New()
+
+    oStatement:SetQuery(cQuery)
+    
+    cFinalQuery := oStatement:GetFixQuery()
+
+    if !Empty(cFinalQuery)
+        cAlias  := MPSysOpenQuery(cFinalQuery)
+
+        aCampos := (cAlias)->(DBStruct())
+
+        For nX := 1 to Len(aCampos)
+            if (aCampos[nX][1] <> "R_E_C_N_O_" .And. aCampos[nX][1] <> "R_E_C_D_E_L_")
+                aAdd(aHeader, {;
+                        GetSX3Cache(aCampos[nX][1],"X3_TITULO"),;   // TITULO
+                        aCampos[nX][1],;                            // CAMPO
+                        GetSX3Cache(aCampos[nX][1],"X3_PICTURE"),;  // MASCARA
+                        aCampos[nX][3],;                            // TAMANHO
+                        aCampos[nX][4],;                            // DECIMAL
+                        GetSX3Cache(aCampos[nX][1],"X3_VALID"),;    // VALIDACAO
+                        GetSX3Cache(aCampos[nX][1],"X3_USADO"),;    // USADO
+                        aCampos[nX][2],;                            // TIPO
+                        GetSX3Cache(aCampos[nX][1],"X3_F3"),;       // F3
+                        GetSX3Cache(aCampos[nX][1],"X3_CBOX");      // COMBO
+                    } )
+            endif
+        Next
+
+        oMsGetSBM := MsNewGetDados():New(   080,;                //nTop      - Linha Inicial
+                                            003,;                //nLeft     - Coluna Inicial
+                                            (nJanAltu/2)-3,;     //nBottom   - Linha Final
+                                            (nJanLarg/2)-3,;     //nRight    - Coluna Final
+                                            ,;                   //nStyle    - Estilos para edição da Grid (GD_INSERT = Inclusão de Linha; GD_UPDATE = Alteração de Linhas; GD_DELETE = Exclusão de Linhas)
+                                            "AllwaysTrue()",;    //cLinhaOk  - Validação da linha
+                                            ,;                   //cTudoOk   - Validação de todas as linhas
+                                            "",;                 //cIniCpos  - Função para inicialização de campos
+                                            {},;                 //aAlter    - Colunas que podem ser alteradas
+                                            ,;                   //nFreeze   - Número da coluna que será congelada
+                                            9999,;               //nMax      - Máximo de Linhas
+                                            ,;                   //cFieldOK  - Validação da coluna
+                                            ,;                   //cSuperDel - Validação ao apertar '+'
+                                            ,;                   //cDelOk    - Validação na exclusão da linha
+                                            oDlgPvt,;            //oWnd      - Janela que é a dona da grid
+                                            aHeader,;           //aHeader   - Cabeçalho da Grid
+                                            aCols)            //aCols     - Dados da Grid
+    Endif
+
+    While (cAlias)->(!EOF()) 
+        Aadd(aCols,{})
+            For nX := 1 to Len(aCampos)
+                if (aCampos[nX][1] <> "R_E_C_N_O_" .And. aCampos[nX][1] <> "R_E_C_D_E_L_")
+                    Aadd(aCols[nY],(cAlias)->&(aCampos[nX][1]))
+                endif
+            Next
+        nY++
+        (cAlias)->(DBSkip())
+    End
+
+Return 
